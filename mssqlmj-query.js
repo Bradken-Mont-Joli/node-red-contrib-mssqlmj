@@ -26,17 +26,21 @@ module.exports = function(RED) {
         this.serverConfig = RED.nodes.getNode(config.serverConfig);
 
         this.query = config.query || "";
-        this.querySource = config.querySource || "query";
-        this.querySourceType = config.querySourceType || "msg";
-        this.paramsSource = config.paramsSource || "params";
-        this.paramsSourceType = config.paramsSourceType || "msg";
+        this.querySource = config.querySource || "editor";
+        this.querySourceType = config.querySourceType || "editor";
+        this.paramsSource = config.paramsSource || "none";
+        this.paramsSourceType = config.paramsSourceType || "none";
         this.outField = config.outField || "payload";
+        this.parseMustache = config.parseMustache !== undefined ? config.parseMustache : true;
+        this.returnType = parseInt(config.returnType, 10) || 0; // 0 = Rows, 1 = Driver Metadata[cite: 31]
+        this.throwErrors = parseInt(config.throwErrors, 10) === 1; // 1 = Throw, 0 = Send in msg[cite: 31]
         this.split = config.split || false;
         this.rowsPerMsg = parseInt(config.rowsPerMsg, 10) || 1;
 
         const node = this;
 
         node.getEvaluatedProperty = function(prop, propType, msg) {
+            if (propType === 'editor' || propType === 'none') return Promise.resolve(undefined);
             return new Promise((resolve) => {
                 if (!prop) return resolve(undefined);
                 RED.util.evaluateNodeProperty(prop, propType, node, msg, (err, res) => {
@@ -44,6 +48,23 @@ module.exports = function(RED) {
                     else resolve(res);
                 });
             });
+        };
+
+        // Gestionnaire d'erreurs répliquant la logique mssql-plus[cite: 31]
+        node.processError = function (err, msg, done) {
+            let errMsg = err.message || err.toString();
+            node.status({ fill: 'red', shape: 'ring', text: errMsg });
+            
+            if (node.throwErrors) {
+                done(err); // Déclenche un nœud Catch
+            } else {
+                msg.error = {
+                    message: errMsg,
+                    originalError: err
+                };
+                node.send(msg); // Continue le flux avec l'erreur dans le payload
+                done();
+            }
         };
 
         node.on('input', async function(msg, send, done) {
@@ -61,20 +82,38 @@ module.exports = function(RED) {
             let paramsVal;
 
             try {
-                rawQuery = await node.getEvaluatedProperty(node.querySource, node.querySourceType, msg);
-                if (!rawQuery && typeof msg.payload === 'string') rawQuery = msg.payload;
-                if (!rawQuery) rawQuery = node.query;
+                if (node.querySourceType === 'editor') {
+                    rawQuery = node.query;
+                } else {
+                    rawQuery = await node.getEvaluatedProperty(node.querySource, node.querySourceType, msg);
+                }
 
-                if (!rawQuery) return done(new Error("Requête SQL vide"));
+                // Fallback de compatibilité absolue
+                if (!rawQuery && typeof msg.payload === 'string') rawQuery = msg.payload;
+
+                if (!rawQuery) {
+                    return node.processError(new Error("Requête SQL vide"), msg, done);
+                }
 
                 paramsVal = await node.getEvaluatedProperty(node.paramsSource, node.paramsSourceType, msg);
 
-                if ((!paramsVal || Object.keys(paramsVal).length === 0) && rawQuery.includes("{{")) {
-                    rawQuery = Mustache.render(rawQuery, { msg: msg, flow: node.context().flow, global: node.context().global });
+                // Évaluation Mustache robuste
+                if (node.parseMustache && rawQuery.includes("{{")) {
+                    const flowCtx = {};
+                    node.context().flow.keys().forEach(k => { flowCtx[k] = node.context().flow.get(k); });
+                    const globalCtx = {};
+                    node.context().global.keys().forEach(k => { globalCtx[k] = node.context().global.get(k); });
+
+                    const view = Object.assign({}, msg, {
+                        msg: msg,
+                        flow: flowCtx,
+                        global: globalCtx
+                    });
+                    rawQuery = Mustache.render(rawQuery, view);
                 }
+
             } catch (evalErr) {
-                node.status({ fill: "red", shape: "ring", text: "Erreur évaluation" });
-                return done(evalErr);
+                return node.processError(evalErr, msg, done);
             }
 
             const executeQueryWithRetry = async () => {
@@ -113,7 +152,14 @@ module.exports = function(RED) {
                             sendChunk(rowsData, true);
                         } else {
                             const msgToSend = RED.util.cloneMessage(msg);
-                            RED.util.setMessageProperty(msgToSend, node.outField, rowsData);
+                            
+                            // Logique ReturnType de mssql-plus[cite: 31]
+                            let finalPayload = rowsData;
+                            if (node.returnType === 1) {
+                                finalPayload = { recordset: rowsData, rowsAffected: [totalRows] };
+                            }
+                            
+                            RED.util.setMessageProperty(msgToSend, node.outField, finalPayload);
                             msgToSend.mssql = { rowCount: totalRows, queryDurationMs: Date.now() - startTime };
 
                             node.status({ fill: "green", shape: "dot", text: `${totalRows} lignes (${msgToSend.mssql.queryDurationMs}ms)` });
@@ -122,8 +168,7 @@ module.exports = function(RED) {
                         delete msg._mssql_attempt;
                         done();
                     } catch (postErr) {
-                        node.status({ fill: "red", shape: "dot", text: "Erreur traitement" });
-                        done(postErr);
+                        return node.processError(postErr, msg, done);
                     }
                 });
 
@@ -131,7 +176,12 @@ module.exports = function(RED) {
                     if (rowsChunk.length === 0 && !isComplete) return;
 
                     const msgChunk = RED.util.cloneMessage(msg);
-                    const payloadData = (node.rowsPerMsg === 1 && rowsChunk.length === 1) ? rowsChunk[0] : rowsChunk;
+                    let payloadData = (node.rowsPerMsg === 1 && rowsChunk.length === 1) ? rowsChunk[0] : rowsChunk;
+
+                    // Adaptation ReturnType en mode split
+                    if (node.returnType === 1) {
+                        payloadData = { recordset: (Array.isArray(payloadData) ? payloadData : [payloadData]) };
+                    }
 
                     RED.util.setMessageProperty(msgChunk, node.outField, payloadData);
                     msgChunk.parts = {
@@ -146,7 +196,6 @@ module.exports = function(RED) {
                     send(msgChunk);
                 }
 
-                // Lecture robuste des colonnes (tableau ou objet)
                 request.on('row', (columns) => {
                     totalRows++;
                     let rowObj = {};
@@ -207,20 +256,17 @@ module.exports = function(RED) {
 
                     setTimeout(() => {
                         executeQueryWithRetry().catch(e => {
-                            node.status({ fill: "red", shape: "dot", text: "Erreur fatale" });
-                            done(e);
+                            node.processError(e, msg, done);
                         });
                     }, delay);
                 } else {
-                    node.status({ fill: "red", shape: "dot", text: "Erreur SQL" });
                     delete msg._mssql_attempt;
-                    done(err);
+                    node.processError(err, msg, done);
                 }
             }
 
             executeQueryWithRetry().catch(e => {
-                node.status({ fill: "red", shape: "dot", text: "Erreur fatale" });
-                done(e);
+                node.processError(e, msg, done);
             });
         });
     }
