@@ -167,7 +167,7 @@
     <div class="form-row mssqlmj-form-row">
         <label style="width:auto" for="node-input-parseMustache">
             <input type="checkbox" id="node-input-parseMustache" style="display:inline-block; width:15px; margin-bottom:0px; margin-left: 135px;">
-            <span>Parse Mustache ({{msg.val}})</span>
+            <span>Parse Mustache</span>
         </label>
     </div>
 
@@ -197,7 +197,7 @@
     <div class="form-row mssqlmj-form-row">
         <label style="width:auto" for="node-input-split">
             <input type="checkbox" id="node-input-split" style="display:inline-block; width:15px; margin-bottom:0px; margin-left: 135px;">
-            <span>Enable Streaming (Split messages)</span>
+            <span>Enable Streaming</span>
         </label>
     </div>
     
@@ -210,7 +210,19 @@
 <script type="text/markdown" data-help-name="mssqlmj-query">
 Executes a query against a Microsoft SQL Server database.
 
+### Inputs
+* **`msg.query`** *(string)* : The SQL query to execute.
+* **`msg.params`** *(object|array)* : Parameters to prevent SQL injection. Supports 3 formats:
+    * **Key-Value Object**: `{"Limit": 50, "SerialNum": "11KT0"}`
+    * **Simple Array**: `[50, "11KT0"]` (mapped to `@p0`, `@p1`)
+    * **mssql-plus Array**: `[{"name": "Limit", "type": "Int", "value": 50}, {"name": "SerialNum", "type": "NVarChar", "value": "11KT0"}]`
+
+### Outputs
+* **`msg.payload`** *(array|object)* : Query results.
+* **`msg.mssql`** *(object)* : Metadata (`rowCount`, `queryDurationMs`).
+* **`msg.error`** *(object)* : Contains error details if *Error Handling* is set to *Send in msg.error*.
+
 ### Features
-* **Streaming**: Enable split messages to stream large tables.
-* **Mustache**: Parse `{{msg.myValue}}` directly inside the query editor.
+* **Streaming**: Split large result sets into multiple messages.
+* **Mustache**: Parse `{{msg.val}}`, `{{flow.val}}`, or `{{global.val}}` in the query editor.
 </script>

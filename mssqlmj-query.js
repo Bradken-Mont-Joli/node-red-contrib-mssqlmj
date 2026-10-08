@@ -226,11 +226,25 @@ module.exports = function(RED) {
                     if (paramsVal && typeof paramsVal === 'object') {
                         if (Array.isArray(paramsVal)) {
                             paramsVal.forEach((val, idx) => {
-                                request.addParameter(`p${idx}`, inferTediousType(val), val);
+                                // Détection du format classique mssql-plus : [{name: "Limit", type: "Int", value: 50}]
+                                if (val && typeof val === 'object' && val.hasOwnProperty('name') && val.hasOwnProperty('value')) {
+                                    let tediousType = val.type ? TYPES[val.type] : inferTediousType(val.value);
+                                    if (!tediousType) tediousType = inferTediousType(val.value); // Fallback si le type est inconnu
+                                    
+                                    // Retrait de l'éventuel '@' au cas où il serait inclus dans le nom
+                                    const cleanName = val.name.replace(/^@/, '');
+                                    request.addParameter(cleanName, tediousType, val.value);
+                                } 
+                                // Format tableau simple : [50, "11KT0"] -> @p0, @p1
+                                else {
+                                    request.addParameter(`p${idx}`, inferTediousType(val), val);
+                                }
                             });
                         } else {
+                            // Format objet clé-valeur : {"Limit": 50, "SerialNum": "11KT0"}
                             for (const [pName, pVal] of Object.entries(paramsVal)) {
-                                request.addParameter(pName, inferTediousType(pVal), pVal);
+                                const cleanName = pName.replace(/^@/, '');
+                                request.addParameter(cleanName, inferTediousType(pVal), pVal);
                             }
                         }
                     }

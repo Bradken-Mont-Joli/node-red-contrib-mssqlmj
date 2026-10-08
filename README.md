@@ -58,24 +58,50 @@ npm install @bkmj/node-red-contrib-mssqlmj
 
 ## Usage Examples
 
-1. Parameterized Query (SQL Injection Safe)
+The node automatically handles four different parameter formats to ensure 100% backward compatibility.
 
-```javaScript
-msg.query = "SELECT * FROM dbo.Orders WHERE Status = @status AND TotalAmount > @minAmount";
+### 1. Parameterized Queries (SQL Injection Safe)
+
+**Key-Value Object (Recommended):**
+
+```javascript
+msg.query = "SELECT * FROM dbo.SerialNo WHERE SerialNumber = @SerialNum AND Status = @Status";
 msg.params = {
-    status: "APPROVED",
-    minAmount: 500.00
+    SerialNum: "11KT0",
+    Status: "ACTIVE"
 };
-return msg;
 ```
 
-2. Mustache Templating with Flow/Global Context
+**Legacy mssql-plus Parameter Array:**
+
+```javaScript
+msg.query = "SELECT TOP (@Limit) * FROM dbo.SerialNo WHERE SerialNumber = @SerialNum";
+msg.params = [
+    { name: "Limit", type: "Int", value: 50 },
+    { name: "SerialNum", type: "NVarChar", value: "11KT0" }
+];
+```
+
+**Simple Position Array:**
+
+```javaScript
+msg.query = "SELECT * FROM dbo.SerialNo WHERE Limit = @p0 AND SerialNumber = @p1";
+msg.params = [50, "11KT0"];
+```
+
+### 2. Mustache Templating Examples
+
+If **Parse Mustache** is checked, you can embed Mustache expressions directly in the query editor.
+
+**Using** `msg`, `flow`, `global`, **and** `env` **context:**
 
 ```sql
-SELECT PartNum, PartDescription 
-FROM dbo.Part 
-WHERE Plant = '{{flow.plantId}}' 
-  AND CreatedOn >= '{{msg.startDate}}'
+SELECT p.PartNum, p.PartDescription, p.CreatedOn
+FROM [{{env.DB_NAME}}].[epicor].[part] AS p WITH(NOLOCK)
+WHERE p.Company = '{{global.companyCode}}'
+  AND p.Plant = '{{flow.plantId}}'
+  AND p.CreatedOn >= '{{msg.startDate}}'
+ORDER BY p.PartNum;
 ```
 
 ## Locales Supported

@@ -1,6 +1,6 @@
 {
   "name": "@bkmj/node-red-contrib-mssqlmj",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "main": "mssqlmj-query.js",
   "dependencies": {
     "mustache": "^4.2.0",
