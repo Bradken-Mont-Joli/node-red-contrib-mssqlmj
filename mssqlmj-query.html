@@ -1,0 +1,133 @@
+<script type="text/javascript">
+    RED.nodes.registerType('mssqlmj-query', {
+        category: 'storage',
+        color: '#C0DEED',
+        paletteLabel: "mssql", // Nom affiché dans la palette
+        defaults: {
+            name: { value: "" },
+            serverConfig: { type: "mssqlmj-config", required: true },
+            query: { value: "" },
+            querySource: { value: "query" },
+            querySourceType: { value: "msg" },
+            paramsSource: { value: "params" },
+            paramsSourceType: { value: "msg" },
+            outField: { value: "payload" },
+            split: { value: false },
+            rowsPerMsg: { value: 1, validate: RED.validators.number() }
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: "db.svg",
+        label: function() {
+            return this.name || "mssql"; // Nom par défaut sur le canvas
+        },
+        oneditprepare: function() {
+            // ... (Conservez la logique oneditprepare précédente avec les accordéons et TypedInput) ...
+            $('.form-section-header').on('click', function() {
+                $(this).toggleClass('expanded');$(this).next('.form-section-content').slideToggle();
+            });
+
+            $("#node-input-querySource").typedInput({
+                default: 'msg', types: ['msg', 'flow', 'global', 'env', 'str', 'jsonata'], typeField: "#node-input-querySourceType"
+            });
+            $("#node-input-paramsSource").typedInput({
+                default: 'msg', types: ['msg', 'flow', 'global', 'env', 'jsonata'], typeField: "#node-input-paramsSourceType"
+            });
+
+            $("#node-input-split").on("change", function() {
+                if ($(this).is(":checked")) { $(".form-row-rowsPerMsg").show(); } else { $(".form-row-rowsPerMsg").hide(); }
+            }).trigger("change");
+
+            this.editor = RED.editor.createEditor({
+                id: 'node-input-query-editor', mode: 'ace/mode/sql', value: $("#node-input-query").val()
+            });
+            this.editor.focus();
+        },
+        oneditsave: function() {
+            $("#node-input-query").val(this.editor.getValue());
+            this.editor.destroy();
+            delete this.editor;
+        },
+        oneditcancel: function() {
+            if (this.editor) { this.editor.destroy(); delete this.editor; }
+        }
+    });
+</script>
+
+<style>
+    .form-section-header { cursor: pointer; padding: 6px; background-color: #f3f3f3; border: 1px solid #eee; margin-top: 10px; margin-bottom: 5px; font-weight: bold; }
+    .form-section-header i.fa-caret-right { transition: transform 0.2s ease-in-out; margin-right: 5px; }
+    .form-section-header.expanded i.fa-caret-right { transform: rotate(90deg); }
+    .form-section-content { padding-left: 10px; }
+</style>
+
+<script type="text/html" data-template-name="mssqlmj-query">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="mssqlmj.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]mssqlmj.placeholder.name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-serverConfig"><i class="fa fa-server"></i> <span data-i18n="mssqlmj.label.server"></span></label>
+        <input type="text" id="node-input-serverConfig">
+    </div>
+
+    <!-- Source de la Requête -->
+    <div class="form-section-header expanded"><i class="fa fa-caret-right"></i> <i class="fa fa-database"></i> <span data-i18n="mssqlmj.label.querySection"></span></div>
+    <div class="form-section-content">
+        <div class="form-row">
+            <label for="node-input-querySource"><i class="fa fa-code"></i> <span data-i18n="mssqlmj.label.query"></span></label>
+            <input type="text" id="node-input-querySource" style="width: 70%;">
+            <input type="hidden" id="node-input-querySourceType">
+        </div>
+        <div class="form-row">
+            <label for="node-input-paramsSource"><i class="fa fa-list-ol"></i> <span data-i18n="mssqlmj.label.parameters"></span></label>
+            <input type="text" id="node-input-paramsSource" style="width: 70%;">
+            <input type="hidden" id="node-input-paramsSourceType">
+        </div>
+        <div class="form-row" style="margin-bottom: 0px;">
+            <label for="node-input-query"><i class="fa fa-file-code-o"></i> <span data-i18n="mssqlmj.label.fallbackQuery"></span></label>
+            <input type="hidden" id="node-input-query">
+        </div>
+        <div class="form-row node-text-editor-row">
+            <div style="height: 180px; min-height:120px;" class="node-text-editor" id="node-input-query-editor"></div>
+        </div>
+    </div>
+
+    <!-- Options de Sortie -->
+    <div class="form-section-header expanded"><i class="fa fa-caret-right"></i> <i class="fa fa-sign-out"></i> <span data-i18n="mssqlmj.label.outputSection"></span></div>
+    <div class="form-section-content">
+        <div class="form-row">
+            <label for="node-input-outField"><i class="fa fa-edit"></i> <span data-i18n="mssqlmj.label.resultTo"></span></label>
+            <span>msg.</span><input type="text" id="node-input-outField" placeholder="payload" style="width: 60%;">
+        </div>
+        <div class="form-row">
+            <label style="width:auto" for="node-input-split">
+                <input type="checkbox" id="node-input-split" style="display:inline-block; width:15px; margin-bottom:0px;">
+                <span data-i18n="mssqlmj.label.enableStreaming"></span>
+            </label>
+        </div>
+        <div class="form-row form-row-rowsPerMsg" style="display:none;">
+            <label for="node-input-rowsPerMsg"><i class="fa fa-cubes"></i> <span data-i18n="mssqlmj.label.rowsPerMsg"></span></label>
+            <input type="number" id="node-input-rowsPerMsg" style="width: 100px;" min="1" placeholder="1">
+        </div>
+    </div>
+</script>
+
+<!-- Aide intégrée pour Node-RED -->
+<script type="text/markdown" data-help-name="mssqlmj-query">
+Executes a query against a Microsoft SQL Server database.
+
+### Inputs
+* **`msg.query`** *(string)* : The SQL query to execute (overrides the node configuration).
+* **`msg.params`** *(object|array)* : Parameters for the SQL query to prevent SQL injection.
+  * Example: `{"id": 123, "status": "Active"}` replaces `@id` and `@status` in the query.
+
+### Outputs
+* **`msg.payload`** *(array|object)* : The result of the query.
+* **`msg.mssql`** *(object)* : Metadata about the execution (e.g., `rowCount`, `queryDurationMs`).
+* **`msg.parts`** *(object)* : Included only if streaming is enabled, to be used with a `join` node.
+
+### Features
+* **Streaming**: Enable split messages to stream large tables without exhausting RAM.
+* **Mustache**: If `msg.params` is empty, you can use `{{msg.myValue}}` directly inside the query editor.
+</script>

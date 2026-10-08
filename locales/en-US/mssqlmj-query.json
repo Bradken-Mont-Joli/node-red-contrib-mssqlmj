@@ -1,0 +1,19 @@
+{
+    "mssqlmj": {
+        "label": {
+            "name": "Name",
+            "server": "Server",
+            "querySection": "Query Source & Parameters",
+            "query": "Query",
+            "parameters": "Parameters",
+            "fallbackQuery": "Fallback Query (SQL)",
+            "outputSection": "Output & Streaming Options",
+            "resultTo": "Result to",
+            "enableStreaming": "Enable Streaming (Split messages)",
+            "rowsPerMsg": "Rows per message"
+        },
+        "placeholder": {
+            "name": "Node name"
+        }
+    }
+}

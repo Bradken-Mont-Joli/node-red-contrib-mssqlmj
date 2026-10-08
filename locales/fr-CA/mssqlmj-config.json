@@ -1,0 +1,26 @@
+{
+    "mssqlmj": {
+        "label": {
+            "name": "Nom",
+            "server": "Serveur",
+            "port": "Port",
+            "database": "Base de données",
+            "authentication": "Authentification",
+            "authType": "Type",
+            "domain": "Domaine",
+            "username": "Utilisateur",
+            "password": "Mot de passe",
+            "poolSection": "Gestion du Pool de Connexions (Tarn.js)",
+            "minPool": "Pool Min.",
+            "maxPool": "Pool Max.",
+            "prewarmPool": "Pré-chauffer le pool au démarrage",
+            "networkOptions": "Options Réseau & Retries",
+            "encrypt": "Chiffrement TLS (Encryption)",
+            "trustServerCertificate": "Faire confiance au certificat serveur",
+            "connectTimeout": "Timeout Conn. (ms)",
+            "requestTimeout": "Timeout Requête (ms)",
+            "retryAttempts": "Nb. Retries",
+            "retryDelay": "Délai de base (ms) :"
+        }
+    }
+}

@@ -1,0 +1,19 @@
+{
+    "mssqlmj": {
+        "label": {
+            "name": "Nom",
+            "server": "Serveur",
+            "querySection": "Source de la Requête & Paramètres",
+            "query": "Requête",
+            "parameters": "Paramètres",
+            "fallbackQuery": "Requête de secours (SQL)",
+            "outputSection": "Options de sortie & Streaming",
+            "resultTo": "Résultat vers",
+            "enableStreaming": "Activer le streaming (Fractionner les messages)",
+            "rowsPerMsg": "Lignes par message"
+        },
+        "placeholder": {
+            "name": "Nom du nœud"
+        }
+    }
+}

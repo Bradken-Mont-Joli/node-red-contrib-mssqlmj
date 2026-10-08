@@ -1,0 +1,123 @@
+<script type="text/javascript">
+    RED.nodes.registerType('mssqlmj-config', {
+        category: 'config',
+        defaults: {
+            name: { value: "" },
+            server: { value: "", required: true },
+            port: { value: "1433", required: true, validate: RED.validators.number() },
+            database: { value: "", required: true },
+            authType: { value: "ntlm" },
+            domain: { value: "" },
+            encrypt: { value: false },
+            trustServerCertificate: { value: true },
+            minPool: { value: 2, validate: RED.validators.number() },
+            maxPool: { value: 10, validate: RED.validators.number() },
+            prewarmPool: { value: true },
+            connectTimeout: { value: 15000, validate: RED.validators.number() },
+            requestTimeout: { value: 30000, validate: RED.validators.number() },
+            retryAttempts: { value: 3, validate: RED.validators.number() },
+            retryDelay: { value: 500, validate: RED.validators.number() }
+        },
+        credentials: {
+            username: { type: "text" },
+            password: { type: "password" }
+        },
+        label: function() {
+            return this.name || (this.server ? (this.server + (this.database ? "/" + this.database : "")) : "mssql-config");
+        },
+        oneditprepare: function() {
+            $("#node-config-input-authType").on("change", function() {
+                if ($(this).val() === "ntlm") {
+                    $(".form-row-domain").show();
+                } else {
+                    $(".form-row-domain").hide();
+                }
+            }).change();
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="mssqlmj-config">
+    <div class="form-row">
+        <label for="node-config-input-name"><i class="fa fa-tag"></i> <span data-i18n="mssqlmj.label.name">Nom</span></label>
+        <input type="text" id="node-config-input-name" placeholder="Ex: Production DB">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-server"><i class="fa fa-server"></i> <span data-i18n="mssqlmj.label.server">Serveur</span></label>
+        <input type="text" id="node-config-input-server" placeholder="sql.example.com">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-port"><i class="fa fa-plug"></i> <span data-i18n="mssqlmj.label.port">Port</span></label>
+        <input type="text" id="node-config-input-port" style="width: 100px;" placeholder="1433">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-database"><i class="fa fa-database"></i> <span data-i18n="mssqlmj.label.database">Base de données</span></label>
+        <input type="text" id="node-config-input-database" placeholder="my_database">
+    </div>
+
+    <hr>
+    <h4><span data-i18n="mssqlmj.label.authentication">Authentification</span></h4>
+    <div class="form-row">
+        <label for="node-config-input-authType"><i class="fa fa-shield"></i> <span data-i18n="mssqlmj.label.authType">Type</span></label>
+        <select id="node-config-input-authType">
+            <option value="default">SQL Server Authentication</option>
+            <option value="ntlm">Active Directory (NTLM)</option>
+        </select>
+    </div>
+    <div class="form-row form-row-domain">
+        <label for="node-config-input-domain"><i class="fa fa-globe"></i> <span data-i18n="mssqlmj.label.domain">Domaine</span></label>
+        <input type="text" id="node-config-input-domain" placeholder="MYDOMAIN">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-username"><i class="fa fa-user"></i> <span data-i18n="mssqlmj.label.username">Utilisateur</span></label>
+        <input type="text" id="node-config-input-username">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-password"><i class="fa fa-lock"></i> <span data-i18n="mssqlmj.label.password">Mot de passe</span></label>
+        <input type="password" id="node-config-input-password">
+    </div>
+
+    <hr>
+    <h4><span data-i18n="mssqlmj.label.poolSection">Gestion du Pool de Connexions (Tarn.js)</span></h4>
+    <div class="form-row">
+        <label for="node-config-input-minPool"><i class="fa fa-play"></i> <span data-i18n="mssqlmj.label.minPool">Pool Min.</span></label>
+        <input type="text" id="node-config-input-minPool" style="width: 80px;" placeholder="2">
+        <span style="margin-left: 15px;" data-i18n="mssqlmj.label.maxPool">Pool Max. :</span>
+        <input type="text" id="node-config-input-maxPool" style="width: 80px;" placeholder="10">
+    </div>
+    <div class="form-row">
+        <label style="width:auto" for="node-config-input-prewarmPool">
+            <input type="checkbox" id="node-config-input-prewarmPool" style="display:inline-block; width:15px; margin-bottom: 0px;">
+            <span data-i18n="mssqlmj.label.prewarmPool"></span>
+        </label>
+    </div>
+
+    <hr>
+    <h4><span data-i18n="mssqlmj.label.networkOptions">Options Réseau & Retries</span></h4>
+    <div class="form-row">
+        <label style="width:auto" for="node-config-input-encrypt">
+            <input type="checkbox" id="node-config-input-encrypt" style="display:inline-block; width:15px; margin-bottom: 0px;">
+            <span data-i18n="mssqlmj.label.encrypt">Chiffrement TLS (Encryption)</span>
+        </label>
+    </div>
+    <div class="form-row">
+        <label style="width:auto" for="node-config-input-trustServerCertificate">
+            <input type="checkbox" id="node-config-input-trustServerCertificate" style="display:inline-block; width:15px; margin-bottom: 0px;">
+            <span data-i18n="mssqlmj.label.trustServerCertificate">Faire confiance au certificat serveur</span>
+        </label>
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-connectTimeout"><i class="fa fa-clock-o"></i> <span data-i18n="mssqlmj.label.connectTimeout">Timeout Conn. (ms)</span></label>
+        <input type="text" id="node-config-input-connectTimeout" style="width: 100px;" placeholder="15000">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-requestTimeout"><i class="fa fa-clock-o"></i> <span data-i18n="mssqlmj.label.requestTimeout">Timeout Requête (ms)</span></label>
+        <input type="text" id="node-config-input-requestTimeout" style="width: 100px;" placeholder="30000">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-retryAttempts"><i class="fa fa-repeat"></i> <span data-i18n="mssqlmj.label.retryAttempts">Nb. Retries</span></label>
+        <input type="text" id="node-config-input-retryAttempts" style="width: 80px;" placeholder="3">
+        <span style="margin-left: 10px;" data-i18n="mssqlmj.label.retryDelay">Délai de base (ms):</span>
+        <input type="text" id="node-config-input-retryDelay" style="width: 80px;" placeholder="500">
+    </div>
+</script>
