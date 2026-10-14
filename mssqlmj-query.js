@@ -257,7 +257,9 @@ module.exports = function(RED) {
             };
 
             function handleQueryError(err) {
-                const maxAttempts = node.serverConfig.retryAttempts || 3;
+                const maxAttempts = (node.serverConfig && node.serverConfig.retryAttempts !== undefined) 
+                    ? node.serverConfig.retryAttempts 
+                    : 3;
                 const baseDelay = node.serverConfig.retryDelay || 500;
 
                 if (msg._mssql_attempt < maxAttempts) {

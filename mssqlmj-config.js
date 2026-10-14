@@ -18,7 +18,8 @@ module.exports = function(RED) {
         this.prewarmPool = n.prewarmPool !== undefined ? n.prewarmPool : true;
         this.connectTimeout = parseInt(n.connectTimeout, 10) || 15000;
         this.requestTimeout = parseInt(n.requestTimeout, 10) || 30000;
-        this.retryAttempts = parseInt(n.retryAttempts, 10) || 3;
+        const parsedAttempts = parseInt(n.retryAttempts, 10);
+        this.retryAttempts = !isNaN(parsedAttempts) ? parsedAttempts : 3;
         this.retryDelay = parseInt(n.retryDelay, 10) || 500;
 
         this.username = this.credentials ? this.credentials.username : "";

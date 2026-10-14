@@ -15,6 +15,7 @@
             prewarmPool: { value: true },
             connectTimeout: { value: 15000, validate: RED.validators.number() },
             requestTimeout: { value: 30000, validate: RED.validators.number() },
+            // 🟢 AJOUT : Ces deux champs manquaient dans la définition du nœud !
             retryAttempts: { value: 3, validate: RED.validators.number() },
             retryDelay: { value: 500, validate: RED.validators.number() }
         },
