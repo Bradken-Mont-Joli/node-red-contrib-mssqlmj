@@ -13,9 +13,10 @@ module.exports = function(RED) {
         this.trustServerCertificate = n.trustServerCertificate !== undefined ? n.trustServerCertificate : true;
         this.authType = n.authType || 'ntlm';
 
-        this.minPool = parseInt(n.minPool, 10) || 2;
+        const parsedMin = parseInt(n.minPool, 10);
+        this.minPool = !isNaN(parsedMin) ? parsedMin : 0;
         this.maxPool = parseInt(n.maxPool, 10) || 10;
-        this.prewarmPool = n.prewarmPool !== undefined ? n.prewarmPool : true;
+        this.prewarmPool = n.prewarmPool !== undefined ? n.prewarmPool : false;
         this.connectTimeout = parseInt(n.connectTimeout, 10) || 15000;
         this.requestTimeout = parseInt(n.requestTimeout, 10) || 30000;
         const parsedAttempts = parseInt(n.retryAttempts, 10);
@@ -46,10 +47,10 @@ module.exports = function(RED) {
                         encrypt: node.encrypt,
                         trustServerCertificate: node.trustServerCertificate,
                         tdsVersion: '7_4',
+                        enableArithAbort: true,
                         rowCollectionOnRequestCompletion: false,
                         connectTimeout: node.connectTimeout,
                         requestTimeout: node.requestTimeout
-                        // 'useColumnNames: true' retiré pour garantir la réception d'un tableau 'columns'
                     }
                 };
 
@@ -58,25 +59,59 @@ module.exports = function(RED) {
                 }
 
                 const conn = new Connection(config);
+                let settled = false;
+
+                const finishCreate = (err, resource) => {
+                    if (settled) return;
+                    settled = true;
+                    cb(err, resource);
+                };
 
                 conn.on('connect', (err) => {
-                    if (err) return cb(err);
-                    cb(null, conn);
+                    if (err) return finishCreate(err);
+                    finishCreate(null, conn);
                 });
 
                 conn.on('error', (err) => {
-                    node.warn("Erreur sur socket pool : " + err.message);
+                    if (!settled) {
+                        finishCreate(err);
+                    } else {
+                        node.warn("Erreur sur socket pool : " + err.message);
+                    }
+                });
+
+                conn.on('end', () => {
+                    if (!settled) {
+                        finishCreate(new Error("Connexion fermée avant fin d'authentification"));
+                    }
                 });
 
                 conn.connect();
             },
             validate: (conn) => {
-                return conn && conn.state && conn.state.name === 'LoggedIn';
+                return Boolean(conn && !conn.closed && conn.state && conn.state.name === 'LoggedIn');
             },
             destroy: (conn) => {
                 return new Promise((resolve) => {
-                    conn.on('end', resolve);
-                    try { conn.close(); } catch(e) { resolve(); }
+                    if (!conn || conn.closed || (conn.state && conn.state.name === 'Final')) {
+                        return resolve();
+                    }
+                    let done = false;
+                    const finish = () => {
+                        if (done) return;
+                        done = true;
+                        clearTimeout(timer);
+                        resolve();
+                    };
+                    // Sécurité : ne jamais bloquer tarn.js si le VPN a coupé le socket silencieusement
+                    const timer = setTimeout(finish, 3000);
+                    conn.once('end', finish);
+                    conn.once('error', finish);
+                    try {
+                        conn.close();
+                    } catch (e) {
+                        finish();
+                    }
                 });
             },
             min: node.minPool,
@@ -90,10 +125,11 @@ module.exports = function(RED) {
         };
 
         node.release = function(conn) {
-            if (conn) node.pool.release(conn);
+            if (conn) {
+                try { node.pool.release(conn); } catch (e) {}
+            }
         };
 
-        // Pré-chauffage des connexions au démarrage du flow
         if (node.prewarmPool && node.minPool > 0) {
             setImmediate(async () => {
                 node.log(`Pré-chauffage du pool (${node.minPool} connexions)...`);
@@ -116,7 +152,7 @@ module.exports = function(RED) {
         node.on('close', async function(done) {
             try {
                 await node.pool.destroy();
-            } catch(e) {}
+            } catch (e) {}
             done();
         });
     }

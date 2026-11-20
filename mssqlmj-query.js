@@ -32,8 +32,8 @@ module.exports = function(RED) {
         this.paramsSourceType = config.paramsSourceType || "none";
         this.outField = config.outField || "payload";
         this.parseMustache = config.parseMustache !== undefined ? config.parseMustache : true;
-        this.returnType = parseInt(config.returnType, 10) || 0; // 0 = Rows, 1 = Driver Metadata[cite: 31]
-        this.throwErrors = parseInt(config.throwErrors, 10) === 1; // 1 = Throw, 0 = Send in msg[cite: 31]
+        this.returnType = parseInt(config.returnType, 10) || 0; // 0 = Rows, 1 = Driver Metadata
+        this.throwErrors = parseInt(config.throwErrors, 10) === 1; // 1 = Throw, 0 = Send in msg
         this.split = config.split || false;
         this.rowsPerMsg = parseInt(config.rowsPerMsg, 10) || 1;
 
@@ -50,11 +50,11 @@ module.exports = function(RED) {
             });
         };
 
-        // Gestionnaire d'erreurs répliquant la logique mssql-plus[cite: 31]
-        node.processError = function (err, msg, done) {
+        // Gestionnaire d'erreurs répliquant la logique mssql-plus
+        node.processError = function(err, msg, done) {
             let errMsg = err.message || err.toString();
             node.status({ fill: 'red', shape: 'ring', text: errMsg });
-            
+
             if (node.throwErrors) {
                 done(err); // Déclenche un nœud Catch
             } else {
@@ -76,8 +76,7 @@ module.exports = function(RED) {
                 return done(new Error("Aucun serveur configuré"));
             }
 
-            if (!msg._mssql_attempt) msg._mssql_attempt = 0;
-
+            let attempt = 0;
             let rawQuery;
             let paramsVal;
 
@@ -127,6 +126,14 @@ module.exports = function(RED) {
                     return handleQueryError(acquireErr);
                 }
 
+                let released = false;
+                const safeRelease = () => {
+                    if (!released && connection) {
+                        released = true;
+                        node.serverConfig.release(connection);
+                    }
+                };
+
                 node.status({ fill: "yellow", shape: "dot", text: "Exécution..." });
 
                 let rowsData = [];
@@ -135,13 +142,8 @@ module.exports = function(RED) {
                 const partsId = Math.random().toString(36).substring(2, 9);
 
                 const request = new Request(rawQuery, (reqErr, rowCount) => {
-                    if (connection) {
-                        if (reqErr && connection.state && connection.state.name !== 'LoggedIn') {
-                            try { node.serverConfig.pool.destroy(connection); } catch(e){}
-                        } else {
-                            node.serverConfig.release(connection);
-                        }
-                    }
+                    // Toujours rendre la connexion à Tarn.js (qui la détruira via validate() si son état est invalide)
+                    safeRelease();
 
                     if (reqErr) {
                         return handleQueryError(reqErr);
@@ -152,20 +154,19 @@ module.exports = function(RED) {
                             sendChunk(rowsData, true);
                         } else {
                             const msgToSend = RED.util.cloneMessage(msg);
-                            
-                            // Logique ReturnType de mssql-plus[cite: 31]
+
+                            // Logique ReturnType de mssql-plus
                             let finalPayload = rowsData;
                             if (node.returnType === 1) {
                                 finalPayload = { recordset: rowsData, rowsAffected: [totalRows] };
                             }
-                            
+
                             RED.util.setMessageProperty(msgToSend, node.outField, finalPayload);
                             msgToSend.mssql = { rowCount: totalRows, queryDurationMs: Date.now() - startTime };
 
                             node.status({ fill: "green", shape: "dot", text: `${totalRows} lignes (${msgToSend.mssql.queryDurationMs}ms)` });
                             send(msgToSend);
                         }
-                        delete msg._mssql_attempt;
                         done();
                     } catch (postErr) {
                         return node.processError(postErr, msg, done);
@@ -229,12 +230,11 @@ module.exports = function(RED) {
                                 // Détection du format classique mssql-plus : [{name: "Limit", type: "Int", value: 50}]
                                 if (val && typeof val === 'object' && val.hasOwnProperty('name') && val.hasOwnProperty('value')) {
                                     let tediousType = val.type ? TYPES[val.type] : inferTediousType(val.value);
-                                    if (!tediousType) tediousType = inferTediousType(val.value); // Fallback si le type est inconnu
-                                    
-                                    // Retrait de l'éventuel '@' au cas où il serait inclus dans le nom
+                                    if (!tediousType) tediousType = inferTediousType(val.value);
+
                                     const cleanName = val.name.replace(/^@/, '');
                                     request.addParameter(cleanName, tediousType, val.value);
-                                } 
+                                }
                                 // Format tableau simple : [50, "11KT0"] -> @p0, @p1
                                 else {
                                     request.addParameter(`p${idx}`, inferTediousType(val), val);
@@ -251,23 +251,23 @@ module.exports = function(RED) {
 
                     connection.execSql(request);
                 } catch (execErr) {
-                    if (connection) node.serverConfig.release(connection);
+                    safeRelease();
                     handleQueryError(execErr);
                 }
             };
 
             function handleQueryError(err) {
-                const maxAttempts = (node.serverConfig && node.serverConfig.retryAttempts !== undefined) 
-                    ? node.serverConfig.retryAttempts 
+                const maxAttempts = (node.serverConfig && node.serverConfig.retryAttempts !== undefined)
+                    ? node.serverConfig.retryAttempts
                     : 3;
                 const baseDelay = node.serverConfig.retryDelay || 500;
 
-                if (msg._mssql_attempt < maxAttempts) {
-                    msg._mssql_attempt++;
+                if (attempt < maxAttempts) {
+                    attempt++;
                     const jitter = Math.floor(Math.random() * 200);
-                    const delay = (baseDelay * Math.pow(2, msg._mssql_attempt - 1)) + jitter;
+                    const delay = (baseDelay * Math.pow(2, attempt - 1)) + jitter;
 
-                    node.warn(`[MSSQL MJ] Erreur (${err.message}). Re-tentative ${msg._mssql_attempt}/${maxAttempts} dans ${delay}ms...`);
+                    node.warn(`[MSSQL MJ] Erreur (${err.message}). Re-tentative ${attempt}/${maxAttempts} dans ${delay}ms...`);
                     node.status({ fill: "red", shape: "ring", text: `Retry dans ${delay}ms` });
 
                     setTimeout(() => {
@@ -276,7 +276,6 @@ module.exports = function(RED) {
                         });
                     }, delay);
                 } else {
-                    delete msg._mssql_attempt;
                     node.processError(err, msg, done);
                 }
             }
